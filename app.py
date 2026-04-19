@@ -1,52 +1,41 @@
 import streamlit as st
-import cv2
-import mediapipe as mp
-import numpy as np
 from PIL import Image
 
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose()
+st.set_page_config(page_title="AI Saree Draping App", layout="centered")
 
-st.title("👗 AI Virtual Saree Draping App")
+st.title("👗 AI Saree Draping App")
+st.write("Upload your photo and try virtual saree draping!")
 
+# Upload user image
 uploaded_file = st.file_uploader("Upload your image", type=["jpg", "png"])
 
-saree_option = st.selectbox("Choose Saree Style", ["saree1", "saree2"])
+# Load saree overlay image (keep this in assets folder)
+SAREE_IMAGE_PATH = "assets/saree.png"
 
-def apply_saree(image, saree_name):
-    image = np.array(image)
-    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+def overlay_saree(user_img, saree_img):
+    user_img = user_img.convert("RGBA")
+    saree_img = saree_img.convert("RGBA")
 
-    result = pose.process(rgb)
+    # Resize saree to match user image
+    saree_img = saree_img.resize(user_img.size)
 
-    saree = cv2.imread(f"sarees/{saree_name}.png", cv2.IMREAD_UNCHANGED)
+    # Overlay
+    combined = Image.alpha_composite(user_img, saree_img)
+    return combined
 
-    if result.pose_landmarks:
-        h, w, _ = image.shape
+if uploaded_file is not None:
+    user_image = Image.open(uploaded_file)
 
-        left_shoulder = result.pose_landmarks.landmark[11]
-        right_shoulder = result.pose_landmarks.landmark[12]
+    st.subheader("🧍 Your Image")
+    st.image(user_image, use_column_width=True)
 
-        x1, y1 = int(left_shoulder.x * w), int(left_shoulder.y * h)
-        x2, y2 = int(right_shoulder.x * w), int(right_shoulder.y * h)
+    try:
+        saree_image = Image.open(SAREE_IMAGE_PATH)
 
-        saree_width = abs(x2 - x1) * 2
-        saree_height = saree_width * 2
+        output = overlay_saree(user_image, saree_image)
 
-        saree_resized = cv2.resize(saree, (saree_width, saree_height))
+        st.subheader("👗 Saree Draped Output")
+        st.image(output, use_column_width=True)
 
-        for i in range(saree_height):
-            for j in range(saree_width):
-                if saree_resized[i][j][3] != 0:
-                    if y1+i < h and x1+j < w:
-                        image[y1+i][x1+j] = saree_resized[i][j][:3]
-
-    return image
-
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Original Image", use_column_width=True)
-
-    if st.button("Apply Saree"):
-        output = apply_saree(image, saree_option)
-        st.image(output, caption="Saree Applied", use_column_width=True)
+    except Exception as e:
+        st.error("⚠️ Saree image not found. Add saree.png inside assets folder.")
